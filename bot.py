@@ -16,7 +16,7 @@ intents.message_content = True
 
 # Create the bot
 bot = commands.Bot(command_prefix='!', intents=intents)
-bot.remove_command('help')
+bot.remove_command('help') # We write our own help command
 
 @bot.event
 async def on_ready():
@@ -37,17 +37,19 @@ async def on_message(message: Message):
 async def help(ctx):
     await ctx.send(
         f"""Commands:
-            - join
-                - Joins the voice chat
+            - !join [Joins the voice chat]
 
-            - leave
-                - Leaves the voice chat
+            - !leave [Leaves the voice chat]
 
-            - play <filename>
-                - Plays the music file on Jon's computer
+            - !list [Lists all the available music that can be played on Jondando's computer]
 
-            - stop
-                - Stops the music
+            - !play "<filename>" [Plays the music file on Jon's computer]
+
+            - !stop [Stops the music]
+
+            - !louder [Increases the music volume for everyone]
+
+            - !quieter [Decreases the music volume for everyone]
         """
     )
 
@@ -72,7 +74,7 @@ async def play(ctx, filename):
     await ctx.send(f"(Rick) Rolling: {filename}. 🎤")
     voice_channel.play(
         source,
-        after=lambda e: print('done', e)
+        after=lambda e: print(f'Done playing {filename}', e)
     )
     voice_channel.source = discord.PCMVolumeTransformer(voice_channel.source)
     voice_channel.source.volume = 0.07
@@ -82,7 +84,7 @@ async def list(ctx):
     filepath = os.path.abspath(music_dir)
     message = f'{filepath} contains:'
     for file in os.listdir(filepath):
-        message += f'\n\t- {file}'
+        message += f'\n\t- {file}\n'
     await ctx.send(message)
 
 @bot.command()
@@ -95,10 +97,10 @@ async def stop(ctx):
         voice_channel.stop()
         await ctx.send("Stopped the music... Pfft. Buzzkill. 😒")
     else:
-        await ctx.send("No music is playing dude, what on *earth* have you been smoking? 😶‍🌫️")
+        await send_no_music_playing(ctx)
 
 @bot.command()
-async def up(ctx):
+async def louder(ctx):
     voice_channel = discord.utils.get(
         bot.voice_clients,
         channel=ctx.author.voice.channel
@@ -107,10 +109,13 @@ async def up(ctx):
         voice_channel.source.volume += 0.1
         await ctx.send("LOUDER 🤬")
     else:
-        await ctx.send("No music is playing dude, what on *earth* have you been smoking? 😶‍🌫️")
+        await send_no_music_playing(ctx)
+
+async def send_no_music_playing(ctx):
+    await ctx.send("No music is playing dude, what on *earth* have you been smoking? 😶‍🌫️")
 
 @bot.command()
-async def down(ctx):
+async def quieter(ctx):
     voice_channel = discord.utils.get(
         bot.voice_clients,
         channel=ctx.author.voice.channel
@@ -120,7 +125,7 @@ async def down(ctx):
         voice_channel.source.volume = vol
         await ctx.send("Shhhh 🤫")
     else:
-        await ctx.send("No music is playing dude, what on *earth* have you been smoking? 😶‍🌫️")
+        await send_no_music_playing(ctx)
 
 @bot.command()
 async def leave(ctx):
@@ -147,4 +152,4 @@ async def join(ctx):
         await ctx.send("You are not in a voice channel... ❔❔❔")
 
 if __name__ == "__main__":
-    bot.run('<INSERT TOKEN HERE>')
+    bot.run('MTE3Nzk3MDcxNjY3NTY3MDA0NQ.G1cTgo.RMamGZ8F7UghLXwwZGzaxYhEaujgwqpV36E5kw')
