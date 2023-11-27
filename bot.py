@@ -1,7 +1,10 @@
 import discord
 import os
+from threading import Thread
 from discord.ext import commands
 from discord.message import Message
+
+from playlist_manager import PlaylistManager
 
 music_dir = 'music'
 
@@ -17,6 +20,14 @@ intents.message_content = True
 # Create the bot
 bot = commands.Bot(command_prefix='!', intents=intents)
 bot.remove_command('help') # We write our own help command
+
+def get_author_voice(ctx):
+    voice_channel = discord.utils.get(
+            bot.voice_clients, 
+            guild=ctx.guild,
+            channel=ctx.author.voice.channel
+        )
+    return voice_channel
 
 @bot.event
 async def on_ready():
@@ -39,13 +50,21 @@ async def help(ctx):
         f"""Commands:
             - !join [Joins the voice chat]
 
-            - !leave [Leaves the voice chat]
+            - !leave [Leaves the voice chat, stopping and clearing any playlist]
 
             - !list [Lists all the available music that can be played on Jondando's computer]
 
-            - !play "<filename>" [Plays the music file on Jon's computer]
+            - !playlist [Lists all songs in the current playlist]
 
-            - !stop [Stops the music]
+            - !add "<filename>" [Add the music file on Jon's computer to the playlist]
+
+            - !play [Sets the playlist to play mode]
+
+            - !stop [Stops the playlist]
+
+            - !skip [Skips the current song]
+
+            - !clear [Clears the playlist]
 
             - !louder [Increases the music volume for everyone]
 
@@ -54,30 +73,66 @@ async def help(ctx):
     )
 
 @bot.command()
-async def play(ctx, filename):
+async def play(ctx):
     channel = ctx.author.voice.channel
+    guild = ctx.guild
     try:
         voice_channel = await channel.connect()
     except discord.errors.ClientException as e:
         if 'Already connected to a voice channel' not in str(e):
             raise e
-        voice_channel = discord.utils.get(
-            bot.voice_clients, 
-            channel=ctx.author.voice.channel
-        )
-    
+        voice_channel = get_author_voice(ctx)
+    PlaylistManager.start_playlist(voice_channel, str(guild), str(channel))
+    await ctx.send("Playlist set to play 💦")
+
+@bot.command()
+async def stop(ctx):
+    channel = ctx.author.voice.channel
+    guild = ctx.guild
+    voice_channel = get_author_voice(ctx)
+    if voice_channel:
+        PlaylistManager.stop_playlist(str(guild), str(channel))
+
+    if voice_channel and voice_channel.is_playing():
+        voice_channel.stop()
+        await ctx.send("Stopped the music... Pfft. Buzzkill. 😒")
+    else:
+        await send_no_music_playing(ctx)
+
+@bot.command()
+async def add(ctx, filename):
+    channel = ctx.author.voice.channel
+    guild = ctx.guild
     filepath = os.path.abspath(os.path.join(music_dir, filename))
     if not os.path.isfile(filepath):
         await ctx.send(f"❌ {filepath} does not exist Josh... Try again you doofus 🙂")
         return
     source = discord.FFmpegPCMAudio(os.path.join('music', filepath))
-    await ctx.send(f"(Rick) Rolling: {filename}. 🎤")
-    voice_channel.play(
-        source,
-        after=lambda e: print(f'Done playing {filename}', e)
-    )
-    voice_channel.source = discord.PCMVolumeTransformer(voice_channel.source)
-    voice_channel.source.volume = 0.07
+    
+    PlaylistManager.add_to_playlist(filename, source, str(guild), str(channel))
+    await ctx.send(f"Added {filename} to playlist 🤝🏼")
+
+@bot.command()
+async def skip(ctx):
+    voice_channel = get_author_voice(ctx)
+    if voice_channel and voice_channel.is_playing():
+        voice_channel.stop()
+        await ctx.send("Skipping the current song ⏭️")
+    else:
+        await send_no_music_playing(ctx)
+
+@bot.command()
+async def clear(ctx):
+    channel = ctx.author.voice.channel
+    guild = ctx.guild
+    PlaylistManager.clear_playlist(str(guild), str(channel))
+    await ctx.send(f"Cleared the playlist 💣")
+
+@bot.command()
+async def playlist(ctx):
+    channel = ctx.author.voice.channel
+    guild = ctx.guild
+    await PlaylistManager.list_playlist(ctx, str(guild), str(channel))
 
 @bot.command()
 async def list(ctx):
@@ -88,23 +143,8 @@ async def list(ctx):
     await ctx.send(message)
 
 @bot.command()
-async def stop(ctx):
-    voice_channel = discord.utils.get(
-        bot.voice_clients,
-        channel=ctx.author.voice.channel
-    )
-    if voice_channel and voice_channel.is_playing():
-        voice_channel.stop()
-        await ctx.send("Stopped the music... Pfft. Buzzkill. 😒")
-    else:
-        await send_no_music_playing(ctx)
-
-@bot.command()
 async def louder(ctx):
-    voice_channel = discord.utils.get(
-        bot.voice_clients,
-        channel=ctx.author.voice.channel
-    )
+    voice_channel = get_author_voice(ctx)
     if voice_channel and voice_channel.is_playing():
         voice_channel.source.volume += 0.1
         await ctx.send("LOUDER 🤬")
@@ -116,12 +156,9 @@ async def send_no_music_playing(ctx):
 
 @bot.command()
 async def quieter(ctx):
-    voice_channel = discord.utils.get(
-        bot.voice_clients,
-        channel=ctx.author.voice.channel
-    )
+    voice_channel = get_author_voice(ctx)
     if voice_channel and voice_channel.is_playing():
-        vol = max(voice_channel.source.volume - 0.1, 0.07)
+        vol = max(voice_channel.source.volume - 0.1, 0.47)
         voice_channel.source.volume = vol
         await ctx.send("Shhhh 🤫")
     else:
@@ -129,12 +166,15 @@ async def quieter(ctx):
 
 @bot.command()
 async def leave(ctx):
-    voice = discord.utils.get(
-        bot.voice_clients, 
-        channel=ctx.author.voice.channel
-    )
-    if voice:
-        await voice.disconnect()
+    channel = ctx.author.voice.channel
+    guild = ctx.guild
+    voice_channel = get_author_voice(ctx)
+    if voice_channel:
+        PlaylistManager.terminate_playlist(
+            server=str(guild),
+            channel=str(channel)
+        )
+        await voice_channel.disconnect()
         await ctx.send("👋 Left the voice channel. Gone but never gonna let you down.")
     else:
         await ctx.send("I'm not in a voice channel 😭 If you don't like me just say it.")
@@ -147,9 +187,10 @@ async def join(ctx):
         # Join the voice channel
         voice = await channel.connect()
         await ctx.send(f'👋 Joined {channel}, and I\'m never gonna give you up 🧑🏿‍🎤')
+        
         return voice
     else:
         await ctx.send("You are not in a voice channel... ❔❔❔")
 
 if __name__ == "__main__":
-    bot.run('MTE3Nzk3MDcxNjY3NTY3MDA0NQ.G1cTgo.RMamGZ8F7UghLXwwZGzaxYhEaujgwqpV36E5kw')
+    bot.run('<INSERT TOKEN HERE>')
