@@ -42,9 +42,22 @@ class PlaylistManager:
         playlist.put((name, source))
 
     @classmethod
-    def get_next_song(cls, server, channel) -> Tuple:
+    def clear_playlist(cls, server, channel) -> None:
+       with cls.playlists_lock:
+            key = (server, channel)
+            value = cls.playlists.get(key)
+            if not value:
+                return
+            playlist = Queue()
+            curr_playing = ''
+            cls.playlists[key] = (curr_playing, playlist)
+
+    @classmethod
+    def get_next_song(cls, server, channel, terminate_event: Event) -> Tuple:
         _, playlist = cls.__get_playlist(server, channel)
         while True:
+            if terminate_event.is_set():
+                return
             print(f'Waiting on item to be available in playlist {(server, channel)}...')
             try:
                 name, source = playlist.get(block=True, timeout=2)
@@ -68,19 +81,20 @@ class PlaylistManager:
             key = (server, channel)
             value = cls.threads.get(key)
             if value and (thread := value[0]) and thread.is_alive():
-                _, play_event = value
+                _, play_event, _ = value
                 print(f'Setting play event for {(server, channel)}')
                 play_event.set()
                 return
             play_event = Event()
             play_event.set()
+            terminate_event = Event()
             thread = Thread(
                 target=playlist_loop,
-                args=(voice_channel, server, channel, play_event),
+                args=(voice_channel, server, channel, play_event, terminate_event),
                 name=str(key),
                 daemon=True
             )
-            cls.threads[key] = thread, play_event
+            cls.threads[key] = thread, play_event, terminate_event
             print(f'Starting playlist for {(server, channel)}')
             thread.start()
     
@@ -92,14 +106,33 @@ class PlaylistManager:
             value = cls.threads.get(key)
             if not value:
                 return
-            _, play_event = value
+            _, play_event, _ = value
             print(f'Clearing play event for {(server, channel)}')
             play_event.clear()
+        cls.__set_playlist_current('', server, channel)
+    
+    @classmethod
+    def terminate_playlist(cls, server: str, channel: str) -> None:
+        with cls.threads_lock:
+            key = (server, channel)
+            value = cls.threads.get(key)
+            if value:
+                thread, play_event, stop_event = value
+                stop_event.set()
+                play_event.set() # Prevents blocking, but we will not actually play
+                print(f'Waiting for {thread.name} to terminate...')
+                thread.join()
+                print(f'{thread.name} terminated.')
+        cls.clear_playlist(server, channel)
 
-def playlist_loop(voice_channel, server, channel, play_event: Event):
+def playlist_loop(voice_channel, server, channel, play_event: Event, terminate_event: Event):
     while True:
-        name, source = PlaylistManager.get_next_song(server, channel)
+        name, source = PlaylistManager.get_next_song(server, channel, terminate_event)
+        if terminate_event.is_set():
+            return
         play_event.wait()
+        if terminate_event.is_set():
+            return
         voice_channel.play(
             source,
             after=lambda e: print(f'Done playing {name}', e)
@@ -108,4 +141,6 @@ def playlist_loop(voice_channel, server, channel, play_event: Event):
         voice_channel.source.volume = 0.47
 
         while voice_channel.is_playing():
+            if terminate_event.is_set():
+                return
             sleep(5)

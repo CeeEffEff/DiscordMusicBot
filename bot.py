@@ -150,8 +150,14 @@ async def quieter(ctx):
 
 @bot.command()
 async def leave(ctx):
+    channel = ctx.author.voice.channel
+    guild = ctx.guild
     voice_channel = get_author_voice(ctx)
     if voice_channel:
+        PlaylistManager.terminate_playlist(
+            server = str(guild),
+            channel=str(channel)
+        )
         await voice_channel.disconnect()
         await ctx.send("👋 Left the voice channel. Gone but never gonna let you down.")
     else:
