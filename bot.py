@@ -24,7 +24,7 @@ bot.remove_command('help') # We write our own help command
 def get_author_voice(ctx):
     voice_channel = discord.utils.get(
             bot.voice_clients, 
-            guild=ctx.author.voice.guild,
+            guild=ctx.guild,
             channel=ctx.author.voice.channel
         )
     return voice_channel
@@ -65,38 +65,21 @@ async def help(ctx):
     )
 
 @bot.command()
-async def play(ctx, filename):
+async def play(ctx):
     channel = ctx.author.voice.channel
-    guild = ctx.author.voice.guild
+    guild = ctx.guild
     try:
         voice_channel = await channel.connect()
     except discord.errors.ClientException as e:
         if 'Already connected to a voice channel' not in str(e):
             raise e
         voice_channel = get_author_voice(ctx)
-
-    filepath = os.path.abspath(os.path.join(music_dir, filename))
-    if not os.path.isfile(filepath):
-        await ctx.send(f"❌ {filepath} does not exist Josh... Try again you doofus 🙂")
-        return
-    source = discord.FFmpegPCMAudio(os.path.join('music', filepath))
-    
-    PlaylistManager.add_to_playlist(source, str(guild), str(channel))
-    await ctx.send(f"Adding {filename} to playlist...")
-    PlaylistManager.start_playlist(ctx, voice_channel, str(guild), str(channel))
-
-@bot.command()
-async def list(ctx):
-    filepath = os.path.abspath(music_dir)
-    message = f'{filepath} contains:'
-    for file in os.listdir(filepath):
-        message += f'\n\t- {file}\n'
-    await ctx.send(message)
+    PlaylistManager.start_playlist(voice_channel, str(guild), str(channel))
 
 @bot.command()
 async def stop(ctx):
     channel = ctx.author.voice.channel
-    guild = ctx.author.voice.guild
+    guild = ctx.guild
     voice_channel = get_author_voice(ctx)
     if voice_channel:
         PlaylistManager.stop_playlist(str(guild), str(channel))
@@ -106,6 +89,42 @@ async def stop(ctx):
         await ctx.send("Stopped the music... Pfft. Buzzkill. 😒")
     else:
         await send_no_music_playing(ctx)
+
+@bot.command()
+async def add(ctx, filename):
+    channel = ctx.author.voice.channel
+    guild = ctx.guild
+    filepath = os.path.abspath(os.path.join(music_dir, filename))
+    if not os.path.isfile(filepath):
+        await ctx.send(f"❌ {filepath} does not exist Josh... Try again you doofus 🙂")
+        return
+    source = discord.FFmpegPCMAudio(os.path.join('music', filepath))
+    
+    PlaylistManager.add_to_playlist(filename, source, str(guild), str(channel))
+    await ctx.send(f"Adding {filename} to playlist...")
+
+@bot.command()
+async def skip(ctx):
+    voice_channel = get_author_voice(ctx)
+    if voice_channel and voice_channel.is_playing():
+        voice_channel.stop()
+        await ctx.send("Skipping the current song.")
+    else:
+        await send_no_music_playing(ctx)
+
+@bot.command()
+async def playlist(ctx):
+    channel = ctx.author.voice.channel
+    guild = ctx.guild
+    await PlaylistManager.list_playlist(ctx, str(guild), str(channel))
+
+@bot.command()
+async def list(ctx):
+    filepath = os.path.abspath(music_dir)
+    message = f'{filepath} contains:'
+    for file in os.listdir(filepath):
+        message += f'\n\t- {file}\n'
+    await ctx.send(message)
 
 @bot.command()
 async def louder(ctx):
@@ -123,7 +142,7 @@ async def send_no_music_playing(ctx):
 async def quieter(ctx):
     voice_channel = get_author_voice(ctx)
     if voice_channel and voice_channel.is_playing():
-        vol = max(voice_channel.source.volume - 0.1, 0.07)
+        vol = max(voice_channel.source.volume - 0.1, 0.47)
         voice_channel.source.volume = vol
         await ctx.send("Shhhh 🤫")
     else:
