@@ -50,13 +50,21 @@ async def help(ctx):
         f"""Commands:
             - !join [Joins the voice chat]
 
-            - !leave [Leaves the voice chat]
+            - !leave [Leaves the voice chat, stopping and clearing any playlist]
 
             - !list [Lists all the available music that can be played on Jondando's computer]
 
-            - !play "<filename>" [Plays the music file on Jon's computer]
+            - !playlist [Lists all songs in the current playlist]
 
-            - !stop [Stops the music]
+            - !add "<filename>" [Add the music file on Jon's computer to the playlist]
+
+            - !play [Sets the playlist to play mode]
+
+            - !stop [Stops the playlist]
+
+            - !skip [Skips the current song]
+
+            - !clear [Clears the playlist]
 
             - !louder [Increases the music volume for everyone]
 
@@ -75,6 +83,7 @@ async def play(ctx):
             raise e
         voice_channel = get_author_voice(ctx)
     PlaylistManager.start_playlist(voice_channel, str(guild), str(channel))
+    await ctx.send("Playlist set to play 💦")
 
 @bot.command()
 async def stop(ctx):
@@ -101,16 +110,23 @@ async def add(ctx, filename):
     source = discord.FFmpegPCMAudio(os.path.join('music', filepath))
     
     PlaylistManager.add_to_playlist(filename, source, str(guild), str(channel))
-    await ctx.send(f"Adding {filename} to playlist...")
+    await ctx.send(f"Added {filename} to playlist 🤝🏼")
 
 @bot.command()
 async def skip(ctx):
     voice_channel = get_author_voice(ctx)
     if voice_channel and voice_channel.is_playing():
         voice_channel.stop()
-        await ctx.send("Skipping the current song.")
+        await ctx.send("Skipping the current song ⏭️")
     else:
         await send_no_music_playing(ctx)
+
+@bot.command()
+async def clear(ctx):
+    channel = ctx.author.voice.channel
+    guild = ctx.guild
+    PlaylistManager.clear_playlist(str(guild), str(channel))
+    await ctx.send(f"Cleared the playlist 💣")
 
 @bot.command()
 async def playlist(ctx):
@@ -155,7 +171,7 @@ async def leave(ctx):
     voice_channel = get_author_voice(ctx)
     if voice_channel:
         PlaylistManager.terminate_playlist(
-            server = str(guild),
+            server=str(guild),
             channel=str(channel)
         )
         await voice_channel.disconnect()
