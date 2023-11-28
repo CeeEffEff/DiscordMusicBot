@@ -108,9 +108,9 @@ async def add(ctx, filename):
         await add_file(ctx, filename, channel, guild, filepath)
         return
     if os.path.isdir(filepath):
-        await add_file(ctx, filename, channel, guild, filepath)
+        await add_dir(ctx, filename, channel, guild, filepath)
+        return
     await ctx.send(f"❌ {filepath} does not exist Josh... Try again you doofus 🙂")
-    return
 
 async def add_file(ctx, filename, channel, guild, filepath):
     source = discord.FFmpegPCMAudio(filepath)
