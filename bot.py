@@ -104,13 +104,31 @@ async def add(ctx, filename):
     channel = ctx.author.voice.channel
     guild = ctx.guild
     filepath = os.path.abspath(os.path.join(music_dir, filename))
-    if not os.path.isfile(filepath):
-        await ctx.send(f"❌ {filepath} does not exist Josh... Try again you doofus 🙂")
+    if os.path.isfile(filepath):
+        await add_file(ctx, filename, channel, guild, filepath)
         return
-    source = discord.FFmpegPCMAudio(os.path.join('music', filepath))
-    
+    if os.path.isdir(filepath):
+        await add_file(ctx, filename, channel, guild, filepath)
+    await ctx.send(f"❌ {filepath} does not exist Josh... Try again you doofus 🙂")
+    return
+
+async def add_file(ctx, filename, channel, guild, filepath):
+    source = discord.FFmpegPCMAudio(filepath)
     PlaylistManager.add_to_playlist(filename, source, str(guild), str(channel))
     await ctx.send(f"Added {filename} to playlist 🤝🏼")
+
+async def add_dir(ctx, dirname, channel, guild, dirpath):
+    added = 0
+    for filename in os.listdir(dirpath):
+        filepath = os.path.abspath(os.path.join(dirpath, filename))
+        try:
+            source = discord.FFmpegPCMAudio(filepath)
+        except Exception as e:
+            print(e)
+            continue
+        PlaylistManager.add_to_playlist(filename, source, str(guild), str(channel))
+        added += 1
+    await ctx.send(f"Added {added} files from {dirname} to playlist 🤝🏼")
 
 @bot.command()
 async def skip(ctx):
