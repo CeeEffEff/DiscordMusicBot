@@ -121,6 +121,8 @@ async def add_dir(ctx, dirname, channel, guild, dirpath):
     added = 0
     for filename in os.listdir(dirpath):
         filepath = os.path.abspath(os.path.join(dirpath, filename))
+        if not os.path.isfile(filepath):
+            continue
         try:
             source = discord.FFmpegPCMAudio(filepath)
         except Exception as e:
