@@ -1,10 +1,13 @@
 import discord
 import os
+from functools import partial
 from threading import Thread
+from pytube import YouTube
 from discord.ext import commands
 from discord.message import Message
 
 from playlist_manager import PlaylistManager
+from bot_token import TOKEN
 
 music_dir = 'music'
 
@@ -100,10 +103,13 @@ async def stop(ctx):
         await send_no_music_playing(ctx)
 
 @bot.command()
-async def add(ctx, filename):
+async def add(ctx, filename: str):
     channel = ctx.author.voice.channel
     guild = ctx.guild
     filepath = os.path.abspath(os.path.join(music_dir, filename))
+    if filename.startswith('https://www.youtube.com') or filename.startswith('https://youtu.be'):
+        await add_yt_song(ctx, filename, channel, guild)
+        return
     if os.path.isfile(filepath):
         await add_file(ctx, filename, channel, guild, filepath)
         return
@@ -111,6 +117,28 @@ async def add(ctx, filename):
         await add_dir(ctx, filename, channel, guild, filepath)
         return
     await ctx.send(f"❌ {filepath} does not exist Josh... Try again you doofus 🙂")
+
+async def add_yt_song(ctx, url, channel, guild):
+    try:
+        yt = YouTube(url)
+        stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
+        if not stream:
+            await ctx.send(f"Stream for {url} not available.")
+            return
+        await ctx.send(f"Attempting to download {url}... Will add to the playlist if successful 🤞")
+        add_func = partial(add_downloaded, yt.title, channel, guild)
+        yt.register_on_complete_callback(add_func)
+        dl_thread = Thread(target=stream.download, args=(music_dir,))
+        dl_thread.daemon = True
+        dl_thread.start()
+    except Exception as e:
+        await ctx.send(f"Error: {e}")
+    
+
+def add_downloaded(filename, channel, guild, obj, filepath):
+    source = discord.FFmpegPCMAudio(filepath)
+    PlaylistManager.add_to_playlist(filename, source, str(guild), str(channel))
+    print(f"Added {filename} to playlist")
 
 async def add_file(ctx, filename, channel, guild, filepath):
     source = discord.FFmpegPCMAudio(filepath)
@@ -213,4 +241,4 @@ async def join(ctx):
         await ctx.send("You are not in a voice channel... ❔❔❔")
 
 if __name__ == "__main__":
-    bot.run('<INSERT TOKEN HERE>')
+    bot.run(TOKEN)
