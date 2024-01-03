@@ -48,6 +48,10 @@ async def on_message(message: Message):
     await bot.process_commands(message)
 
 @bot.command()
+async def square(ctx):
+    await ctx.send('Josh rn: 🟨👉👈')
+
+@bot.command()
 async def help(ctx):
     await ctx.send(
         f"""Commands:
@@ -55,11 +59,13 @@ async def help(ctx):
 
             - !leave [Leaves the voice chat, stopping and clearing any playlist]
 
-            - !list [Lists all the available music that can be played on Jondando's computer]
+            - !list [Lists all the downloaded available music that can be played on the computer]
 
             - !playlist [Lists all songs in the current playlist]
 
-            - !add "<filename>" [Add the music file on Jon's computer to the playlist]
+            - !add "<filename>" [Add the music file on local computer to the playlist]
+            
+            - !add "<youtube url>" [Download and add the youtube song to the playlist]
 
             - !play [Sets the playlist to play mode]
 
@@ -116,7 +122,7 @@ async def add(ctx, filename: str):
     if os.path.isdir(filepath):
         await add_dir(ctx, filename, channel, guild, filepath)
         return
-    await ctx.send(f"❌ {filepath} does not exist Josh... Try again you doofus 🙂")
+    await ctx.send(f"❌ {filepath} does not exist... Try again you doofus 🙂")
 
 async def add_yt_song(ctx, url, channel, guild):
     try:
@@ -200,7 +206,7 @@ async def louder(ctx):
         await send_no_music_playing(ctx)
 
 async def send_no_music_playing(ctx):
-    await ctx.send("No music is playing dude, what on *earth* have you been smoking? 😶‍🌫️")
+    await ctx.send("No music is playing dude 😶")
 
 @bot.command()
 async def quieter(ctx):
