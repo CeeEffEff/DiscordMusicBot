@@ -1,10 +1,9 @@
 import discord
 import os
-from functools import partial
-from threading import Thread
-from pytube import YouTube
 from discord.ext import commands
 from discord.message import Message
+import youtube_dl
+import traceback
 
 from playlist_manager import PlaylistManager
 from squares import Squares
@@ -138,18 +137,24 @@ async def add(ctx, filename: str):
 
 async def add_yt_song(ctx, url, channel, guild):
     try:
-        yt = YouTube(url)
-        stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
-        if not stream:
-            await ctx.send(f"Stream for {url} not available.")
-            return
-        await ctx.send(f"Attempting to download {url}... Will add to the playlist if successful 🤞")
-        add_func = partial(add_downloaded, yt.title, channel, guild)
-        yt.register_on_complete_callback(add_func)
-        dl_thread = Thread(target=stream.download, args=(music_dir,))
-        dl_thread.daemon = True
-        dl_thread.start()
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+        }
+        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            audio_url = info['url']
+        source = discord.FFmpegPCMAudio(audio_url)
+        title = info.get('title', 'Unknown Title')
+        PlaylistManager.add_to_playlist(title, source, str(guild), str(channel))
+        await ctx.send(f"Added {title} to playlist 🤝🏼")
     except Exception as e:
+        error_message = f"Error: {e}\n\n{traceback.format_exc()}"
+        print(error_message)
         await ctx.send(f"Error: {e}")
     
 
