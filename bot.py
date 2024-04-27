@@ -7,6 +7,7 @@ from discord.ext import commands
 from discord.message import Message
 
 from playlist_manager import PlaylistManager
+from squares import Squares
 from bot_token import TOKEN
 
 music_dir = 'music'
@@ -40,7 +41,7 @@ async def on_ready():
 async def on_message(message: Message):
     if message.author == bot.user:  # Ignore messages from the bot itself
         return
-    print(f'Message content: {message.content}')
+    print(f'Message content - [{message.author}] - {message.content}')
     if not message.content:  # Check if the message content is empty
         return
 
@@ -48,8 +49,19 @@ async def on_message(message: Message):
     await bot.process_commands(message)
 
 @bot.command()
-async def square(ctx):
-    await ctx.send('Josh rn: 🟨👉👈')
+async def squares(ctx):
+    await ctx.send(f'{Squares.list_squares()}')
+
+@bot.command()
+async def square(ctx, name:str):
+    Squares.add_square(ctx.author, name)
+    if Squares.is_square(name):
+        await ctx.send(f'{name} rn: 🟨👉👈')
+
+@bot.command()
+async def round(ctx, name:str):
+    Squares.remove_square(ctx.author, name)
+    await ctx.send(f'Round boi {name} 😏')
 
 @bot.command()
 async def help(ctx):
@@ -172,6 +184,15 @@ async def skip(ctx):
     if voice_channel and voice_channel.is_playing():
         voice_channel.stop()
         await ctx.send("Skipping the current song ⏭️")
+        channel = ctx.author.voice.channel
+        guild = ctx.guild
+        try:
+            voice_channel = await channel.connect()
+        except discord.errors.ClientException as e:
+            if 'Already connected to a voice channel' not in str(e):
+                raise e
+            voice_channel = get_author_voice(ctx)
+        PlaylistManager.start_playlist(voice_channel, str(guild), str(channel))
     else:
         await send_no_music_playing(ctx)
 
@@ -192,9 +213,12 @@ async def playlist(ctx):
 async def list(ctx):
     filepath = os.path.abspath(music_dir)
     message = f'{filepath} contains:'
-    for file in os.listdir(filepath):
-        message += f'\n\t- {file}\n'
-    await ctx.send(message)
+    files =  os.listdir(filepath)
+    batch_size = 20
+    for i in range(0, len(files), batch_size):
+        for file in files[i:i+batch_size]:
+            message += f'\n\t- {file}\n'
+            await ctx.send(message)
 
 @bot.command()
 async def louder(ctx):
