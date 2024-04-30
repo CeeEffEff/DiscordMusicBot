@@ -13,7 +13,7 @@ class PlaylistManager:
     threads_lock = Lock()
 
     @classmethod
-    def __get_playlist(cls, server, channel) -> Tuple[str, Queue]:
+    def get_playlist(cls, server, channel) -> Tuple[str, Queue]:
         with cls.playlists_lock:
             key = (server, channel)
             value = cls.playlists.get(key)
@@ -38,7 +38,7 @@ class PlaylistManager:
 
     @classmethod
     def add_to_playlist(cls, name: str, source: discord.FFmpegPCMAudio, server, channel) -> None:
-        _, playlist = cls.__get_playlist(server, channel)
+        _, playlist = cls.get_playlist(server, channel)
         playlist.put((name, source))
 
     @classmethod
@@ -54,7 +54,7 @@ class PlaylistManager:
 
     @classmethod
     def get_next_song(cls, server, channel, terminate_event: Event) -> Tuple:
-        _, playlist = cls.__get_playlist(server, channel)
+        _, playlist = cls.get_playlist(server, channel)
         while True:
             if terminate_event.is_set():
                 return
@@ -68,12 +68,12 @@ class PlaylistManager:
 
     @classmethod
     async def list_playlist(cls, ctx, server, channel) -> None:
-        curr_playing, playlist = cls.__get_playlist(server, channel)
-        message = f'Current/Up Next:\n\t[{curr_playing}]\n'
-        message += '\nFollowed By:'
+        curr_playing, playlist = cls.get_playlist(server, channel)
+        playlist_info = f"```yaml\nCurrent/Up Next:\n[{curr_playing}]\n\nFollowed By:\n"
         for num, (name, _) in enumerate(playlist.queue, start=1):
-            message += f'\n\t{num}. [{name}]\n'
-        await ctx.send(message)
+            playlist_info += f"{num}. {name}\n"
+        playlist_info += "```"
+        await ctx.send(playlist_info)
 
     @classmethod
     def start_playlist(cls, voice_channel, server, channel) -> None:
