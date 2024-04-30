@@ -30,6 +30,15 @@ Install the necessary packages:
 > pip install -r requirements.txt
 ```
 
+In bot.py add your token in place of the constant `TOKEN`.
+Be careful to not check-in any changes to bot.py that would expose your private token.
+
+You can prevent git from recognising changes with:
+```
+> git update-index --assume-unchanged bot_token.py
+```
+
+
 # Using the bot
 Invite the bot to a server using:
 https://discord.com/api/oauth2/authorize?client_id=1177970716675670045&permissions=36011190242880&scope=bot
